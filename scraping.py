@@ -8,20 +8,22 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import datetime as dt
 
-# Run all scraping functions and store results in dictionary
-data = {
-      "news_title": news_title,
-      "news_paragraph": news_paragraph,
-      "featured_image": featured_image(browser),
-      "facts": mars_facts(),
-      "last_modified": dt.datetime.now()
-}
-
-
 def scrape_all():
     # Initiate headless driver for deployment
     browser = Browser("chrome", executable_path="chromedriver", headless=True)
     news_title, news_paragraph = mars_news(browser)
+
+    # Run all scraping functions and store results in dictionary
+    data = {
+        "news_title": news_title,
+        "news_paragraph": news_paragraph,
+        "featured_image": featured_image(browser),
+        "facts": mars_facts(),
+        "mars_hemi" : mars_hemi(browser),
+        "last_modified": dt.datetime.now()
+        }
+    browser.quit()
+    return data
 
 def mars_news(browser):
 
@@ -85,15 +87,52 @@ def featured_image(browser):
 
 def mars_facts():
     
-    try:
-        df = pd.read_html('http://space-facts.com/mars/')[0]
-    except BaseException:
-        return: None
+
+    df = pd.read_html('http://space-facts.com/mars/')[0]
+
 
     df.columns=['description', 'value']
     df.set_index('description', inplace=True)
 
     return df.to_html()
+
+def mars_hemi(browser):
+    url = 'https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars'
+    browser.visit(url)
+
+    browser.is_element_present_by_css("ul.item_list li.slide", wait_time=1)
+    
+    html = browser.html
+    hemisphere_soup = BeautifulSoup(html, 'html.parser')
+
+    # store image urls in list
+    list_hemi_dict = []
+    
+    # store hemi in dict
+    hemi_dict = {}
+
+    # get all the title
+    results = hemisphere_soup.find_all('h3')
+    for result in results:
+
+        browser.click_link_by_partial_text(result.text)
+        
+        html = browser.html
+        img_soup = BeautifulSoup(html, 'html.parser')
+
+        url = img_soup.find('div', class_='downloads').find_all('a')[1]['href']
+
+        hemi_dict['name'] = result.text
+
+        hemi_dict['img_url'] = url
+
+        list_hemi_dict.append(hemi_dict)
+        
+        hemi_dict = {}
+
+        browser.back()
+        
+    return list_hemi_dict
 
 if __name__ == "__main__":
     # If running as script, print scraped data
